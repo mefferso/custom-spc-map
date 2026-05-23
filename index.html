@@ -36,6 +36,8 @@
         const sector15Bounds = [[46.0, -107.0], [31.5, -89.0]];
 
         // 4. Define live image layers directly from the SPC URLs
+        const mixedLayerCAPE = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/mlcp/mlcp.gif', sector15Bounds, {opacity: 0.7});
+        const sigTornado = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/stpc/stpc.gif', sector15Bounds, {opacity: 0.7});
         const surfaceCAPE = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif', sector15Bounds, {opacity: 0.7});
         const bulkShear = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif', sector15Bounds, {opacity: 0.7});
         const radarFill = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif', sector15Bounds, {opacity: 0.8});
@@ -44,7 +46,9 @@
         const overlayLayers = {
             "<span class='text-emerald-400 font-semibold'>Live Radar Loop</span>": radarFill,
             "Surface CAPE (SBCP)": surfaceCAPE,
-            "Effective Bulk Shear (ESHR)": bulkShear
+            "Mixed-Layer CAPE (MLCP)": mixedLayerCAPE, // <-- Added
+            "Effective Bulk Shear (ESHR)": bulkShear,
+            "Sig Tornado Parameter (STP)": sigTornado    // <-- Added
         };
 
         // Default layers active on load
