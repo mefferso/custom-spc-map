@@ -6,29 +6,31 @@
     <title>SPC Custom Mesoanalysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* This keeps all selected layers perfectly stacked on top of each other */
+        /* The secret sauce: object-fit contain scales the map to the maximum 
+           available viewport space while maintaining perfect alignment */
         .map-layer {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: auto;
-            mix-blend-mode: screen; /* Helps blend dark layers seamlessly */
+            height: 100%;
+            object-fit: contain; 
+            mix-blend-mode: screen; 
         }
     </style>
 </head>
-<body class="bg-gray-950 text-slate-100 font-sans min-h-screen flex flex-col">
+<body class="bg-gray-950 text-slate-100 font-sans min-h-screen flex flex-col overflow-hidden">
 
-    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md">
+    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md shrink-0">
         <div>
             <h1 class="text-xl font-bold text-amber-400 tracking-wide">Mesoanalysis Dashboard</h1>
-            <p class="text-xs text-slate-400">Sector 15 • Pixel-Perfect Stacking</p>
+            <p class="text-xs text-slate-400">Sector 15 • Fullscreen Responsive Stacking</p>
         </div>
     </header>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden w-full h-full">
         
-        <aside class="w-80 bg-gray-900 border-r border-gray-800 p-6 space-y-6 overflow-y-auto">
+        <aside class="w-80 bg-gray-900 border-r border-gray-800 p-6 space-y-6 overflow-y-auto shrink-0">
             <div>
                 <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Base & Radar</h2>
                 <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
@@ -41,7 +43,7 @@
                 <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Thermodynamics</h2>
                 <div class="space-y-2">
                     <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-sbcp" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <input type="checkbox" id="toggle-sbcp" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
                         <span>Surface CAPE (SBCP)</span>
                     </label>
                     <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
@@ -59,7 +61,7 @@
                 <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Wind Shear & Kinematics</h2>
                 <div class="space-y-2">
                     <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-eshr" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <input type="checkbox" id="toggle-eshr" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
                         <span>Effective Bulk Shear (ESHR)</span>
                     </label>
                     <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
@@ -70,15 +72,15 @@
             </div>
         </aside>
 
-        <main class="flex-1 bg-gray-950 p-6 flex items-center justify-center overflow-auto">
-            <div class="relative w-full max-w-4xl aspect-[4/3] bg-black shadow-2xl rounded-lg overflow-hidden border border-gray-800">
+        <main class="flex-1 bg-gray-950 p-4 flex items-center justify-center overflow-hidden">
+            <div class="relative w-full h-full">
                 
                 <img id="layer-rdr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif" class="map-layer z-10">
                 
-                <img id="layer-sbcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif" class="map-layer z-20 opacity-80">
+                <img id="layer-sbcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif" class="map-layer z-20 opacity-80 hidden">
                 <img id="layer-mlcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/mlcp/mlcp.gif" class="map-layer z-20 opacity-80 hidden">
                 <img id="layer-dcape" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/dcape/dcape.gif" class="map-layer z-20 opacity-80 hidden">
-                <img id="layer-eshr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif" class="map-layer z-30 opacity-75 hidden">
+                <img id="layer-eshr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif" class="map-layer z-30 opacity-75">
                 <img id="layer-stpc" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/stpc/stpc.gif" class="map-layer z-40 opacity-85 hidden">
                 
             </div>
@@ -99,7 +101,6 @@
             });
         }
 
-        // Link the checkboxes to the image layers
         setupToggle('toggle-rdr', 'layer-rdr');
         setupToggle('toggle-sbcp', 'layer-sbcp');
         setupToggle('toggle-mlcp', 'layer-mlcp');
