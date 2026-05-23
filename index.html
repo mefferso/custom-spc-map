@@ -3,60 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern SPC Mesoanalysis</title>
+    <title>SPC Custom Mesoanalysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: calc(100vh - 60px); width: 100%; background: #111827; }
+        /* This keeps all selected layers perfectly stacked on top of each other */
+        .map-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            mix-blend-mode: screen; /* Helps blend dark layers seamlessly */
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-white font-sans overflow-hidden">
+<body class="bg-gray-950 text-slate-100 font-sans min-h-screen flex flex-col">
 
-    <header class="h-[60px] bg-gray-800 border-b border-gray-700 flex items-center px-6 justify-between">
-        <h1 class="text-xl font-bold tracking-wide text-amber-400">Custom Meso UI (Sector 15)</h1>
-        <p class="text-xs text-gray-400">Pulling live from spc.noaa.gov</p>
+    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md">
+        <div>
+            <h1 class="text-xl font-bold text-amber-400 tracking-wide">Mesoanalysis Dashboard</h1>
+            <p class="text-xs text-slate-400">Sector 15 • Pixel-Perfect Stacking</p>
+        </div>
     </header>
 
-    <div id="map"></div>
+    <div class="flex flex-1 overflow-hidden">
+        
+        <aside class="w-80 bg-gray-900 border-r border-gray-800 p-6 space-y-6 overflow-y-auto">
+            <div>
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Base & Radar</h2>
+                <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                    <input type="checkbox" id="toggle-rdr" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                    <span>Live Radar Loop (RDR)</span>
+                </label>
+            </div>
+
+            <div>
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Thermodynamics</h2>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                        <input type="checkbox" id="toggle-sbcp" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <span>Surface CAPE (SBCP)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                        <input type="checkbox" id="toggle-mlcp" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <span>Mixed-Layer CAPE (MLCP)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                        <input type="checkbox" id="toggle-dcape" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <span>Downdraft CAPE (DCAPE)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Wind Shear & Kinematics</h2>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                        <input type="checkbox" id="toggle-eshr" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <span>Effective Bulk Shear (ESHR)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                        <input type="checkbox" id="toggle-stpc" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
+                        <span>Sig Tornado Parameter (STPC)</span>
+                    </label>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 bg-gray-950 p-6 flex items-center justify-center overflow-auto">
+            <div class="relative w-full max-w-4xl aspect-[4/3] bg-black shadow-2xl rounded-lg overflow-hidden border border-gray-800">
+                
+                <img id="layer-rdr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif" class="map-layer z-10">
+                
+                <img id="layer-sbcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif" class="map-layer z-20 opacity-80">
+                <img id="layer-mlcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/mlcp/mlcp.gif" class="map-layer z-20 opacity-80 hidden">
+                <img id="layer-dcape" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/dcape/dcape.gif" class="map-layer z-20 opacity-80 hidden">
+                <img id="layer-eshr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif" class="map-layer z-30 opacity-75 hidden">
+                <img id="layer-stpc" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/stpc/stpc.gif" class="map-layer z-40 opacity-85 hidden">
+                
+            </div>
+        </main>
+    </div>
 
     <script>
-        // 1. Initialize the map centered on the Central Plains
-        const map = L.map('map', {
-            zoomSnap: 0.1
-        }).setView([38.5, -98.0], 6);
+        function setupToggle(checkboxId, layerId) {
+            const checkbox = document.getElementById(checkboxId);
+            const layer = document.getElementById(layerId);
+            
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    layer.classList.remove('hidden');
+                } else {
+                    layer.classList.add('hidden');
+                }
+            });
+        }
 
-        // 2. Add a clean, dark base map so the SPC data stands out
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
-        }).addTo(map);
-
-        // 3. Define Sector 15 Bounding Box (Top-Left and Bottom-Right Coordinates)
-        // Note: You can fine-tune these lat/lon corners to perfectly align the SPC image
-        const sector15Bounds = [[46.0, -107.0], [31.5, -89.0]];
-
-        // 4. Define live image layers directly from the SPC URLs
-        const mixedLayerCAPE = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/mlcp/mlcp.gif', sector15Bounds, {opacity: 0.7});
-        const sigTornado = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/stpc/stpc.gif', sector15Bounds, {opacity: 0.7});
-        const surfaceCAPE = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif', sector15Bounds, {opacity: 0.7});
-        const bulkShear = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif', sector15Bounds, {opacity: 0.7});
-        const radarFill = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif', sector15Bounds, {opacity: 0.8});
-
-        // 5. Structure your layers for the UI Toggle Menu
-        const overlayLayers = {
-            "<span class='text-emerald-400 font-semibold'>Live Radar Loop</span>": radarFill,
-            "Surface CAPE (SBCP)": surfaceCAPE,
-            "Mixed-Layer CAPE (MLCP)": mixedLayerCAPE, // <-- Added
-            "Effective Bulk Shear (ESHR)": bulkShear,
-            "Sig Tornado Parameter (STP)": sigTornado    // <-- Added
-        };
-
-        // Default layers active on load
-        radarFill.addTo(map);
-        surfaceCAPE.addTo(map);
-
-        // 6. Add a modern, native toggle box to the top right of the map
-        L.control.layers(null, overlayLayers, { collapsed: false, position: 'topright' }).addTo(map);
+        // Link the checkboxes to the image layers
+        setupToggle('toggle-rdr', 'layer-rdr');
+        setupToggle('toggle-sbcp', 'layer-sbcp');
+        setupToggle('toggle-mlcp', 'layer-mlcp');
+        setupToggle('toggle-dcape', 'layer-dcape');
+        setupToggle('toggle-eshr', 'layer-eshr');
+        setupToggle('toggle-stpc', 'layer-stpc');
     </script>
 </body>
 </html>
