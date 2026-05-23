@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern SPC Mesoanalysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: calc(100vh - 60px); width: 100%; background: #111827; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans overflow-hidden">
+
+    <header class="h-[60px] bg-gray-800 border-b border-gray-700 flex items-center px-6 justify-between">
+        <h1 class="text-xl font-bold tracking-wide text-amber-400">Custom Meso UI (Sector 15)</h1>
+        <p class="text-xs text-gray-400">Pulling live from spc.noaa.gov</p>
+    </header>
+
+    <div id="map"></div>
+
+    <script>
+        // 1. Initialize the map centered on the Central Plains
+        const map = L.map('map', {
+            zoomSnap: 0.1
+        }).setView([38.5, -98.0], 6);
+
+        // 2. Add a clean, dark base map so the SPC data stands out
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(map);
+
+        // 3. Define Sector 15 Bounding Box (Top-Left and Bottom-Right Coordinates)
+        // Note: You can fine-tune these lat/lon corners to perfectly align the SPC image
+        const sector15Bounds = [[46.0, -107.0], [31.5, -89.0]];
+
+        // 4. Define live image layers directly from the SPC URLs
+        const surfaceCAPE = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif', sector15Bounds, {opacity: 0.7});
+        const bulkShear = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif', sector15Bounds, {opacity: 0.7});
+        const radarFill = L.imageOverlay('https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif', sector15Bounds, {opacity: 0.8});
+
+        // 5. Structure your layers for the UI Toggle Menu
+        const overlayLayers = {
+            "<span class='text-emerald-400 font-semibold'>Live Radar Loop</span>": radarFill,
+            "Surface CAPE (SBCP)": surfaceCAPE,
+            "Effective Bulk Shear (ESHR)": bulkShear
+        };
+
+        // Default layers active on load
+        radarFill.addTo(map);
+        surfaceCAPE.addTo(map);
+
+        // 6. Add a modern, native toggle box to the top right of the map
+        L.control.layers(null, overlayLayers, { collapsed: false, position: 'topright' }).addTo(map);
+    </script>
+</body>
+</html>
