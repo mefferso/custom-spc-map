@@ -1,112 +1,1396 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPC Custom Mesoanalysis</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* The secret sauce: object-fit contain scales the map to the maximum 
-           available viewport space while maintaining perfect alignment */
-        .map-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain; 
-            mix-blend-mode: screen; 
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A modern, fast SPC mesoanalysis image viewer with sector/product presets, compare mode, and cache-busted refreshes." />
+  <title>MesoView | SPC Custom Mesoanalysis</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --bg-2: #0b1728;
+      --panel: rgba(13, 25, 43, 0.88);
+      --panel-solid: #0d192b;
+      --panel-2: rgba(18, 32, 53, 0.88);
+      --text: #e8f1ff;
+      --muted: #93a4bb;
+      --muted-2: #63758e;
+      --border: rgba(148, 163, 184, 0.2);
+      --accent: #fbbf24;
+      --accent-2: #38bdf8;
+      --good: #34d399;
+      --bad: #fb7185;
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+      --radius: 18px;
+      --sidebar: 360px;
+      --topbar: 74px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #edf3fb;
+      --bg-2: #f8fbff;
+      --panel: rgba(255, 255, 255, 0.88);
+      --panel-solid: #ffffff;
+      --panel-2: rgba(239, 246, 255, 0.92);
+      --text: #102033;
+      --muted: #50627a;
+      --muted-2: #708196;
+      --border: rgba(71, 85, 105, 0.18);
+      --shadow: 0 22px 60px rgba(23, 37, 84, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(56, 189, 248, 0.18), transparent 28rem),
+        radial-gradient(circle at 82% 15%, rgba(251, 191, 36, 0.12), transparent 26rem),
+        linear-gradient(135deg, var(--bg), #050914 68%);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: var(--topbar) 1fr;
+    }
+
+    button, select, input { font: inherit; }
+    button { border: 0; }
+    a { color: inherit; text-decoration: none; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+      backdrop-filter: blur(16px);
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.94), rgba(56, 189, 248, 0.88));
+      color: #06111f;
+      font-weight: 900;
+      letter-spacing: -0.09em;
+      box-shadow: 0 10px 30px rgba(56, 189, 248, 0.18);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(1rem, 1.6vw, 1.35rem);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 8px 11px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--good);
+      box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.12);
+    }
+
+    .btn {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      user-select: none;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent-2) 48%, var(--border));
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.98), rgba(245, 158, 11, 0.92));
+      color: #111827;
+      border-color: rgba(251, 191, 36, 0.7);
+      font-weight: 800;
+    }
+
+    .btn.ghost { background: transparent; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar) 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px;
+      border-right: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+      backdrop-filter: blur(18px);
+    }
+
+    .sidebar::-webkit-scrollbar, .product-list::-webkit-scrollbar { width: 10px; }
+    .sidebar::-webkit-scrollbar-thumb, .product-list::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.28);
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .section {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.10);
+    }
+
+    .section h2 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 0 10px;
+      color: var(--text);
+      font-size: 0.84rem;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+    }
+
+    .section small {
+      color: var(--muted-2);
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 11px;
+    }
+
+    .field:last-child { margin-bottom: 0; }
+
+    .label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    select, input[type="search"], input[type="text"], input[type="number"] {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-2) 82%, transparent);
+      color: var(--text);
+      padding: 9px 11px;
+      outline: none;
+    }
+
+    input::placeholder { color: var(--muted-2); }
+
+    select:focus, input:focus {
+      border-color: rgba(56, 189, 248, 0.7);
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 5px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg) 74%, transparent);
+    }
+
+    .segmented button {
+      min-height: 35px;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 750;
+    }
+
+    .segmented button.active {
+      background: var(--panel-solid);
+      color: var(--text);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .preset {
+      text-align: left;
+      min-height: 76px;
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg-2) 72%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .preset:hover {
+      transform: translateY(-1px);
+      border-color: rgba(251, 191, 36, 0.55);
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel-solid));
+    }
+
+    .preset strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+
+    .preset span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.25;
+    }
+
+    .product-list {
+      max-height: 42vh;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .group { margin-bottom: 12px; }
+
+    .group-title {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding: 6px 2px;
+      color: var(--accent);
+      background: color-mix(in srgb, var(--panel-solid) 86%, transparent);
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .product {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 6px;
+      padding: 9px 10px;
+      border: 1px solid transparent;
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--bg-2) 64%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .product:hover {
+      border-color: rgba(56, 189, 248, 0.35);
+      background: color-mix(in srgb, var(--accent-2) 8%, var(--panel-solid));
+    }
+
+    .product.active {
+      border-color: rgba(251, 191, 36, 0.65);
+      background: color-mix(in srgb, var(--accent) 11%, var(--panel-solid));
+    }
+
+    .product .name {
+      display: block;
+      font-weight: 750;
+      font-size: 0.86rem;
+      line-height: 1.2;
+    }
+
+    .product .desc {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.25;
+    }
+
+    .code {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 54px;
+      padding: 5px 7px;
+      border-radius: 9px;
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      font-weight: 850;
+      text-transform: lowercase;
+    }
+
+    .custom-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .stage-wrap {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .context-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .crumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .crumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--muted);
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .crumb strong { color: var(--text); }
+
+    .viewer-shell {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background:
+        linear-gradient(45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%),
+        #040914;
+      background-size: 34px 34px;
+      background-position: 0 0, 0 17px, 17px -17px, -17px 0;
+      box-shadow: var(--shadow);
+    }
+
+    .viewer {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      display: grid;
+    }
+
+    .viewer.single, .viewer.stack { grid-template-columns: 1fr; }
+    .viewer.compare { grid-template-columns: 1fr 1fr; }
+
+    .panel {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel:last-child { border-right: 0; }
+
+    .panel-title {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 999px;
+      background: rgba(5, 10, 18, 0.74);
+      color: #f8fafc;
+      backdrop-filter: blur(12px);
+      font-size: 0.78rem;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+      pointer-events: none;
+    }
+
+    .panel-title .code { color: #cbd5e1; background: rgba(255,255,255,0.10); }
+
+    .map-stack {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-origin: center center;
+      transition: transform 0.18s ease;
+    }
+
+    .map-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: auto;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .underlay { z-index: 1; }
+    .main-layer { z-index: 3; }
+    .compare-layer { z-index: 4; }
+
+    .loading {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      display: grid;
+      place-items: center;
+      background: rgba(3, 7, 18, 0.44);
+      color: #e2e8f0;
+      font-weight: 800;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    .loading.show { opacity: 1; }
+
+    .image-error {
+      position: absolute;
+      z-index: 7;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      display: none;
+      padding: 12px;
+      border: 1px solid rgba(251, 113, 133, 0.45);
+      border-radius: 14px;
+      background: rgba(127, 29, 29, 0.86);
+      color: #ffe4e6;
+      font-size: 0.86rem;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.28);
+    }
+
+    .image-error.show { display: block; }
+
+    .toolbar {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 12;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toolbtn {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      border: 1px solid rgba(255,255,255,0.13);
+      background: rgba(5, 10, 18, 0.74);
+      color: #f8fafc;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    }
+
+    .toolbtn:hover { background: rgba(15, 23, 42, 0.92); }
+
+    .footer-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 38px;
+      color: var(--muted);
+      font-size: 0.76rem;
+    }
+
+    .shortcut-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      min-height: 22px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.7rem;
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.08);
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 100;
+      max-width: min(420px, calc(100vw - 28px));
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-solid);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      transform: translateY(18px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .hide-mobile { display: inline-flex; }
+
+    @media (max-width: 1050px) {
+      :root { --sidebar: 310px; }
+      .topbar { align-items: flex-start; }
+      .pill.optional { display: none; }
+    }
+
+    @media (max-width: 840px) {
+      html, body { overflow: auto; }
+      body { min-height: 100%; overflow-x: hidden; }
+      .topbar { position: sticky; top: 0; }
+      .app { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); max-height: none; }
+      .stage-wrap { min-height: 76vh; }
+      .viewer.compare { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+      .panel { border-right: 0; border-bottom: 1px solid var(--border); }
+      .panel:last-child { border-bottom: 0; }
+      .hide-mobile { display: none; }
+    }
+
+    @media (max-width: 580px) {
+      .topbar { padding: 10px; }
+      .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+      .top-actions { width: 100%; justify-content: flex-start; }
+      .context-strip { align-items: flex-start; flex-direction: column; }
+      .preset-grid { grid-template-columns: 1fr; }
+      .footer-strip { align-items: flex-start; flex-direction: column; }
+      .toolbar { flex-direction: row; top: auto; bottom: 12px; }
+    }
+  </style>
 </head>
-<body class="bg-gray-950 text-slate-100 font-sans min-h-screen flex flex-col overflow-hidden">
-
-    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md shrink-0">
-        <div>
-            <h1 class="text-xl font-bold text-amber-400 tracking-wide">Mesoanalysis Dashboard</h1>
-            <p class="text-xs text-slate-400">Sector 15 • Fullscreen Responsive Stacking</p>
-        </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden w-full h-full">
-        
-        <aside class="w-80 bg-gray-900 border-r border-gray-800 p-6 space-y-6 overflow-y-auto shrink-0">
-            <div>
-                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Base & Radar</h2>
-                <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                    <input type="checkbox" id="toggle-rdr" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                    <span>Live Radar Loop (RDR)</span>
-                </label>
-            </div>
-
-            <div>
-                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Thermodynamics</h2>
-                <div class="space-y-2">
-                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-sbcp" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                        <span>Surface CAPE (SBCP)</span>
-                    </label>
-                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-mlcp" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                        <span>Mixed-Layer CAPE (MLCP)</span>
-                    </label>
-                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-dcape" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                        <span>Downdraft CAPE (DCAPE)</span>
-                    </label>
-                </div>
-            </div>
-
-            <div>
-                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Wind Shear & Kinematics</h2>
-                <div class="space-y-2">
-                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-eshr" checked class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                        <span>Effective Bulk Shear (ESHR)</span>
-                    </label>
-                    <label class="flex items-center space-x-3 p-2 rounded hover:bg-gray-800 cursor-pointer">
-                        <input type="checkbox" id="toggle-stpc" class="rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500">
-                        <span>Sig Tornado Parameter (STPC)</span>
-                    </label>
-                </div>
-            </div>
-        </aside>
-
-        <main class="flex-1 bg-gray-950 p-4 flex items-center justify-center overflow-hidden">
-            <div class="relative w-full h-full">
-                
-                <img id="layer-rdr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/rdr/rdr.gif" class="map-layer z-10">
-                
-                <img id="layer-sbcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/sbcp/sbcp.gif" class="map-layer z-20 opacity-80 hidden">
-                <img id="layer-mlcp" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/mlcp/mlcp.gif" class="map-layer z-20 opacity-80 hidden">
-                <img id="layer-dcape" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/dcape/dcape.gif" class="map-layer z-20 opacity-80 hidden">
-                <img id="layer-eshr" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/eshr/eshr.gif" class="map-layer z-30 opacity-75">
-                <img id="layer-stpc" src="https://www.spc.noaa.gov/exper/mesoanalysis/s15/stpc/stpc.gif" class="map-layer z-40 opacity-85 hidden">
-                
-            </div>
-        </main>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">MV</div>
+      <div>
+        <h1>MesoView</h1>
+        <p>Fast SPC mesoanalysis viewer — sector, compare, stack, refresh.</p>
+      </div>
     </div>
+    <div class="top-actions">
+      <span class="pill optional"><span class="status-dot"></span><span id="refreshStatus">Loaded just now</span></span>
+      <button class="btn ghost" id="themeBtn" type="button" title="Toggle theme">☾</button>
+      <a class="btn" id="spcPageLink" target="_blank" rel="noopener">Open SPC</a>
+      <button class="btn primary" id="refreshBtn" type="button">↻ Refresh</button>
+    </div>
+  </header>
 
-    <script>
-        function setupToggle(checkboxId, layerId) {
-            const checkbox = document.getElementById(checkboxId);
-            const layer = document.getElementById(layerId);
-            
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    layer.classList.remove('hidden');
-                } else {
-                    layer.classList.add('hidden');
-                }
-            });
+  <div class="app">
+    <aside class="sidebar" aria-label="Mesoanalysis controls">
+      <section class="section">
+        <h2>Sector <small>fixed SPC regions</small></h2>
+        <div class="field">
+          <label class="label" for="sectorSelect">Map sector</label>
+          <select id="sectorSelect"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="autoRefresh">Auto-refresh</label>
+          <select id="autoRefresh">
+            <option value="0">Off</option>
+            <option value="60">Every 1 minute</option>
+            <option value="300" selected>Every 5 minutes</option>
+            <option value="900">Every 15 minutes</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Layouts <small>one-click workflows</small></h2>
+        <div class="preset-grid" id="presetGrid"></div>
+      </section>
+
+      <section class="section">
+        <h2>Display <small>single / compare / stack</small></h2>
+        <div class="field">
+          <div class="segmented" role="group" aria-label="Display mode">
+            <button type="button" data-mode="single">Single</button>
+            <button type="button" data-mode="compare">Compare</button>
+            <button type="button" data-mode="stack">Stack</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="underlaySelect">Underlay</label>
+          <select id="underlaySelect">
+            <option value="none">None</option>
+            <option value="rdr" selected>Radar base reflectivity</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="productOpacity">Main opacity <span id="productOpacityValue">100%</span></label>
+          <input id="productOpacity" type="range" min="20" max="100" value="100" />
+        </div>
+        <div class="field">
+          <label class="label" for="underlayOpacity">Underlay opacity <span id="underlayOpacityValue">45%</span></label>
+          <input id="underlayOpacity" type="range" min="0" max="100" value="45" />
+        </div>
+        <div class="field">
+          <label class="label" for="blendSelect">Stack blend</label>
+          <select id="blendSelect">
+            <option value="normal">Normal</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+            <option value="hard-light">Hard light</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="zoomSlider">Zoom <span id="zoomValue">100%</span></label>
+          <input id="zoomSlider" type="range" min="70" max="180" value="100" />
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Products <small>searchable catalog</small></h2>
+        <div class="field">
+          <label class="label" for="productSearch">Find a parameter</label>
+          <input id="productSearch" type="search" placeholder="cape, shear, tornado, pwat..." autocomplete="off" />
+        </div>
+        <div class="product-list" id="productList"></div>
+      </section>
+
+      <section class="section">
+        <h2>Custom code <small>for the weird stuff</small></h2>
+        <div class="field">
+          <label class="label" for="customCode">SPC product code</label>
+          <div class="custom-row">
+            <input id="customCode" type="text" placeholder="example: sbcp" spellcheck="false" />
+            <button class="btn" id="customBtn" type="button">Load</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="compareSelect">Compare product</label>
+          <select id="compareSelect"></select>
+        </div>
+      </section>
+    </aside>
+
+    <main class="stage-wrap">
+      <div class="context-strip">
+        <div class="crumbs">
+          <span class="crumb">Sector <strong id="sectorCrumb">SE</strong></span>
+          <span class="crumb">Main <strong id="mainCrumb">SBCAPE</strong></span>
+          <span class="crumb">Compare <strong id="compareCrumb">Eff. Shear</strong></span>
+          <span class="crumb">Mode <strong id="modeCrumb">Single</strong></span>
+        </div>
+        <div class="crumbs">
+          <button class="btn" type="button" id="copyUrlBtn">Copy image URL</button>
+          <button class="btn" type="button" id="openImageBtn">Open image</button>
+        </div>
+      </div>
+
+      <div class="viewer-shell" id="viewerShell">
+        <div class="toolbar" aria-label="Map tools">
+          <button class="toolbtn" id="fitBtn" type="button" title="Fit map">⤢</button>
+          <button class="toolbtn" id="zoomInBtn" type="button" title="Zoom in">+</button>
+          <button class="toolbtn" id="zoomOutBtn" type="button" title="Zoom out">−</button>
+          <button class="toolbtn" id="swapBtn" type="button" title="Swap main and compare">⇄</button>
+        </div>
+
+        <div class="viewer single" id="viewer">
+          <section class="panel" id="mainPanel" aria-label="Main mesoanalysis panel">
+            <div class="panel-title"><span>Main</span><span class="code" id="mainCode">sbcp</span></div>
+            <div class="map-stack" id="mainStack">
+              <img class="map-layer underlay" id="mainUnderlay" alt="Radar underlay" />
+              <img class="map-layer main-layer" id="mainImage" alt="Selected SPC mesoanalysis graphic" />
+              <img class="map-layer compare-layer" id="stackCompareImage" alt="Stacked comparison SPC mesoanalysis graphic" />
+            </div>
+            <div class="loading" id="mainLoading">Loading latest SPC image…</div>
+            <div class="image-error" id="mainError"></div>
+          </section>
+
+          <section class="panel" id="comparePanel" aria-label="Comparison mesoanalysis panel" hidden>
+            <div class="panel-title"><span>Compare</span><span class="code" id="compareCode">eshr</span></div>
+            <div class="map-stack" id="compareStack">
+              <img class="map-layer underlay" id="compareUnderlay" alt="Radar underlay" />
+              <img class="map-layer main-layer" id="compareImage" alt="Comparison SPC mesoanalysis graphic" />
+            </div>
+            <div class="loading" id="compareLoading">Loading compare image…</div>
+            <div class="image-error" id="compareError"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="footer-strip">
+        <div>Source graphics are loaded directly from SPC image endpoints. Cache-busting is automatic on refresh.</div>
+        <div class="shortcut-row hide-mobile">
+          <span><kbd>/</kbd> search</span>
+          <span><kbd>r</kbd> refresh</span>
+          <span><kbd>1</kbd> single</span>
+          <span><kbd>2</kbd> compare</span>
+          <span><kbd>3</kbd> stack</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const BASE_URL = "https://www.spc.noaa.gov/exper/mesoanalysis";
+
+    const sectors = [
+      { id: "19", label: "National", short: "CONUS" },
+      { id: "11", label: "Northwest", short: "NW" },
+      { id: "12", label: "Southwest", short: "SW" },
+      { id: "22", label: "Great Basin", short: "GB" },
+      { id: "13", label: "Northern Plains", short: "N Plains" },
+      { id: "14", label: "Central Plains", short: "C Plains" },
+      { id: "15", label: "Southern Plains", short: "S Plains" },
+      { id: "20", label: "Midwest", short: "MW" },
+      { id: "21", label: "Great Lakes", short: "GL" },
+      { id: "16", label: "Northeast", short: "NE" },
+      { id: "17", label: "East Coast", short: "EC" },
+      { id: "18", label: "Southeast", short: "SE" }
+    ];
+
+    const products = [
+      { group: "Core / Obs", code: "rdr", name: "Radar base reflectivity", desc: "Good underlay for convection placement." },
+      { group: "Thermodynamics", code: "sbcp", name: "Surface-Based CAPE", desc: "Instability tied to the surface parcel." },
+      { group: "Thermodynamics", code: "mlcp", name: "100mb Mixed-Layer CAPE", desc: "Usually more realistic warm-season CAPE." },
+      { group: "Thermodynamics", code: "mucp", name: "Most-Unstable CAPE", desc: "Elevated/most unstable parcel instability." },
+      { group: "Thermodynamics", code: "dcape", name: "Downdraft CAPE", desc: "Dry-air/downburst potential helper." },
+      { group: "Thermodynamics", code: "sbli", name: "Surface-Based Lifted Index", desc: "Classic instability diagnostic." },
+      { group: "Thermodynamics", code: "lr75", name: "700–500 mb lapse rates", desc: "Mid-level lapse-rate quality check." },
+      { group: "Thermodynamics", code: "lllr", name: "Low-level lapse rates", desc: "Boundary-layer steepness / mixing clue." },
+      { group: "Thermodynamics", code: "lclh", name: "LCL height", desc: "Cloud-base height; tornado/fog/fire clue." },
+      { group: "Thermodynamics", code: "lfch", name: "LFC height", desc: "Convective inhibition / initiation helper." },
+      { group: "Wind shear", code: "eshr", name: "Effective bulk shear", desc: "Organized storm / supercell support." },
+      { group: "Wind shear", code: "shr1", name: "0–1 km bulk shear", desc: "Low-level shear near the surface." },
+      { group: "Wind shear", code: "shr3", name: "0–3 km bulk shear", desc: "Low-level storm organization / QLCS support." },
+      { group: "Wind shear", code: "shr6", name: "0–6 km bulk shear", desc: "Deep-layer storm organization." },
+      { group: "Wind shear", code: "esrh", name: "Effective SRH", desc: "Streamwise vorticity in effective inflow layer." },
+      { group: "Wind shear", code: "srh1", name: "0–1 km SRH", desc: "Low-level rotation environment." },
+      { group: "Wind shear", code: "srh3", name: "0–3 km SRH", desc: "Broader low-level helicity context." },
+      { group: "Composite severe", code: "scp", name: "Supercell Composite", desc: "CAPE/shear composite for supercell support." },
+      { group: "Composite severe", code: "stpc", name: "Significant Tornado Parameter — effective", desc: "Right-moving supercell tornado environment." },
+      { group: "Composite severe", code: "stpf", name: "Significant Tornado Parameter — fixed", desc: "Fixed-layer tornado environment." },
+      { group: "Composite severe", code: "sigh", name: "Significant Hail Parameter", desc: "Large hail environment screen." },
+      { group: "Composite severe", code: "lrh", name: "Large Hail Parameter", desc: "Hail-growth ingredients." },
+      { group: "Composite severe", code: "derecho", name: "Derecho Composite", desc: "Widespread wind / MCS environment." },
+      { group: "Composite severe", code: "mmp", name: "MCS Maintenance", desc: "Organized convective-system maintenance." },
+      { group: "Composite severe", code: "mbcp", name: "Microburst Composite", desc: "Localized damaging wind helper." },
+      { group: "Composite severe", code: "ehi1", name: "0–1 km EHI", desc: "Low-level CAPE/SRH combo." },
+      { group: "Composite severe", code: "ehi3", name: "0–3 km EHI", desc: "Broader CAPE/SRH combo." },
+      { group: "Composite severe", code: "crit", name: "Critical Angle", desc: "Storm-relative inflow angle diagnostic." },
+      { group: "Multi-parameter", code: "mlcp_eshr", name: "MLCAPE / Effective Shear", desc: "Quick supercell ingredient overlay." },
+      { group: "Multi-parameter", code: "mucp_eshr", name: "MUCAPE / Effective Shear", desc: "Elevated instability with shear." },
+      { group: "Multi-parameter", code: "lclh_srh1", name: "LCL Height / 0–1 km SRH", desc: "Tornado environment sanity check." },
+      { group: "Multi-parameter", code: "lllr_mlcp", name: "0–3 km lapse rate / 0–3 km MLCAPE", desc: "Low-level stretching / landspout-ish clue." },
+      { group: "Heavy rain", code: "pwat", name: "Precipitable Water", desc: "Deep moisture / rainfall efficiency." },
+      { group: "Heavy rain", code: "pwat_mt", name: "PWAT + 850mb moisture transport", desc: "Moisture depth plus transport." },
+      { group: "Heavy rain", code: "mcon", name: "Moisture Convergence", desc: "Low-level convergence / focusing." },
+      { group: "Heavy rain", code: "mtr850", name: "850mb moisture transport", desc: "Moisture flux into boundaries." },
+      { group: "Heavy rain", code: "upv", name: "Upwind Propagation Vector", desc: "Training/backbuilding support." },
+      { group: "Winter / Fire / Classic", code: "ptyp", name: "Precipitation Type", desc: "Winter precip type diagnostic." },
+      { group: "Winter / Fire / Classic", code: "snsq", name: "Snow Squall Parameter", desc: "Convective winter hazard screen." },
+      { group: "Winter / Fire / Classic", code: "fosb", name: "Fosberg Fire Weather Index", desc: "Fire spread environment helper." },
+      { group: "Winter / Fire / Classic", code: "show", name: "Showalter Index", desc: "Classic elevated instability diagnostic." }
+    ];
+
+    const presets = [
+      { id: "tornado", name: "Tornado", desc: "STP vs effective shear + radar", product: "stpc", compare: "eshr", mode: "compare", underlay: "rdr" },
+      { id: "supercell", name: "Supercell", desc: "SCP with MLCAPE/shear context", product: "scp", compare: "mlcp_eshr", mode: "compare", underlay: "rdr" },
+      { id: "wind", name: "Wind", desc: "DCAPE vs deep shear", product: "dcape", compare: "shr6", mode: "compare", underlay: "rdr" },
+      { id: "hail", name: "Hail", desc: "Sig hail vs mid-level lapse rates", product: "sigh", compare: "lr75", mode: "compare", underlay: "rdr" },
+      { id: "flood", name: "Heavy Rain", desc: "PWAT vs moisture convergence", product: "pwat", compare: "mcon", mode: "compare", underlay: "rdr" },
+      { id: "nowcast", name: "Nowcast", desc: "Radar stacked with MLCAPE", product: "mlcp", compare: "eshr", mode: "stack", underlay: "rdr" }
+    ];
+
+    const state = {
+      sector: "18",
+      product: "sbcp",
+      compare: "eshr",
+      mode: "single",
+      underlay: "rdr",
+      productOpacity: 100,
+      underlayOpacity: 45,
+      blend: "normal",
+      zoom: 100,
+      refreshKey: Date.now(),
+      autoRefresh: 300,
+      theme: localStorage.getItem("mesoview-theme") || "dark"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      sectorSelect: $("sectorSelect"),
+      autoRefresh: $("autoRefresh"),
+      presetGrid: $("presetGrid"),
+      productSearch: $("productSearch"),
+      productList: $("productList"),
+      customCode: $("customCode"),
+      customBtn: $("customBtn"),
+      compareSelect: $("compareSelect"),
+      underlaySelect: $("underlaySelect"),
+      productOpacity: $("productOpacity"),
+      underlayOpacity: $("underlayOpacity"),
+      blendSelect: $("blendSelect"),
+      zoomSlider: $("zoomSlider"),
+      productOpacityValue: $("productOpacityValue"),
+      underlayOpacityValue: $("underlayOpacityValue"),
+      zoomValue: $("zoomValue"),
+      viewer: $("viewer"),
+      comparePanel: $("comparePanel"),
+      mainUnderlay: $("mainUnderlay"),
+      compareUnderlay: $("compareUnderlay"),
+      mainImage: $("mainImage"),
+      compareImage: $("compareImage"),
+      stackCompareImage: $("stackCompareImage"),
+      mainStack: $("mainStack"),
+      compareStack: $("compareStack"),
+      mainLoading: $("mainLoading"),
+      compareLoading: $("compareLoading"),
+      mainError: $("mainError"),
+      compareError: $("compareError"),
+      mainCode: $("mainCode"),
+      compareCode: $("compareCode"),
+      sectorCrumb: $("sectorCrumb"),
+      mainCrumb: $("mainCrumb"),
+      compareCrumb: $("compareCrumb"),
+      modeCrumb: $("modeCrumb"),
+      spcPageLink: $("spcPageLink"),
+      refreshBtn: $("refreshBtn"),
+      refreshStatus: $("refreshStatus"),
+      copyUrlBtn: $("copyUrlBtn"),
+      openImageBtn: $("openImageBtn"),
+      themeBtn: $("themeBtn"),
+      fitBtn: $("fitBtn"),
+      zoomInBtn: $("zoomInBtn"),
+      zoomOutBtn: $("zoomOutBtn"),
+      swapBtn: $("swapBtn"),
+      toast: $("toast")
+    };
+
+    let autoTimer = null;
+    let toastTimer = null;
+
+    function normalizeCode(code) {
+      return String(code || "").trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "");
+    }
+
+    function productUrl(code) {
+      const clean = normalizeCode(code);
+      return `${BASE_URL}/s${state.sector}/${clean}/${clean}.gif?cb=${state.refreshKey}`;
+    }
+
+    function spcSectorUrl() {
+      return `${BASE_URL}/new/viewsector.php?sector=${state.sector}`;
+    }
+
+    function productInfo(code) {
+      const clean = normalizeCode(code);
+      return products.find((p) => p.code === clean) || {
+        group: "Custom",
+        code: clean,
+        name: clean.toUpperCase(),
+        desc: "Custom SPC product code. If it 404s, the code is probably wrong or unavailable for this sector."
+      };
+    }
+
+    function sectorInfo(id = state.sector) {
+      return sectors.find((s) => s.id === String(id)) || { id, label: `Sector ${id}`, short: `S${id}` };
+    }
+
+    function loadStateFromUrl() {
+      const params = new URLSearchParams(location.search);
+      const sector = params.get("sector");
+      const product = normalizeCode(params.get("product"));
+      const compare = normalizeCode(params.get("compare"));
+      const mode = params.get("mode");
+      if (sector && sectors.some((s) => s.id === sector)) state.sector = sector;
+      if (product) state.product = product;
+      if (compare) state.compare = compare;
+      if (["single", "compare", "stack"].includes(mode)) state.mode = mode;
+    }
+
+    function writeStateToUrl() {
+      const params = new URLSearchParams({
+        sector: state.sector,
+        product: state.product,
+        compare: state.compare,
+        mode: state.mode
+      });
+      history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    }
+
+    function renderSectorOptions() {
+      els.sectorSelect.innerHTML = sectors.map((s) => `
+        <option value="${s.id}">${s.short} — ${s.label} (s${s.id})</option>
+      `).join("");
+      els.sectorSelect.value = state.sector;
+    }
+
+    function renderPresets() {
+      els.presetGrid.innerHTML = presets.map((preset) => `
+        <button class="preset" type="button" data-preset="${preset.id}">
+          <strong>${preset.name}</strong>
+          <span>${preset.desc}</span>
+        </button>
+      `).join("");
+    }
+
+    function renderCompareOptions() {
+      const options = products
+        .filter((p) => p.code !== "rdr")
+        .map((p) => `<option value="${p.code}">${p.name} (${p.code})</option>`)
+        .join("");
+      const hasCurrent = products.some((p) => p.code === state.compare);
+      els.compareSelect.innerHTML = options + (hasCurrent ? "" : `<option value="${state.compare}">${state.compare.toUpperCase()} custom</option>`);
+      els.compareSelect.value = state.compare;
+    }
+
+    function renderProducts() {
+      const query = els.productSearch.value.trim().toLowerCase();
+      const filtered = products.filter((p) => {
+        const haystack = `${p.group} ${p.code} ${p.name} ${p.desc}`.toLowerCase();
+        return !query || haystack.includes(query);
+      });
+
+      const groups = filtered.reduce((acc, product) => {
+        acc[product.group] ||= [];
+        acc[product.group].push(product);
+        return acc;
+      }, {});
+
+      const html = Object.entries(groups).map(([group, items]) => `
+        <div class="group">
+          <div class="group-title"><span>${group}</span><span>${items.length}</span></div>
+          ${items.map((p) => `
+            <button type="button" class="product ${p.code === state.product ? "active" : ""}" data-code="${p.code}">
+              <span>
+                <span class="name">${p.name}</span>
+                <span class="desc">${p.desc}</span>
+              </span>
+              <span class="code">${p.code}</span>
+            </button>
+          `).join("")}
+        </div>
+      `).join("");
+
+      els.productList.innerHTML = html || `<div class="pill">No matching products. Try the custom code box.</div>`;
+    }
+
+    function setMode(mode) {
+      state.mode = mode;
+      els.viewer.className = `viewer ${mode}`;
+      els.comparePanel.hidden = mode === "single" || mode === "stack";
+      els.stackCompareImage.style.display = mode === "stack" ? "block" : "none";
+      document.querySelectorAll(".segmented button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === mode);
+      });
+      writeStateToUrl();
+    }
+
+    function setLoading(which, loading) {
+      const el = which === "compare" ? els.compareLoading : els.mainLoading;
+      el.classList.toggle("show", Boolean(loading));
+    }
+
+    function setError(which, message = "") {
+      const el = which === "compare" ? els.compareError : els.mainError;
+      el.textContent = message;
+      el.classList.toggle("show", Boolean(message));
+    }
+
+    function attachImageHandlers(img, which) {
+      img.onload = () => {
+        setLoading(which, false);
+        setError(which, "");
+      };
+      img.onerror = () => {
+        setLoading(which, false);
+        const code = which === "compare" ? state.compare : state.product;
+        setError(which, `SPC image did not load for '${code}' in sector s${state.sector}. Try another product/sector or load the official SPC page.`);
+      };
+    }
+
+    function updateImages() {
+      setLoading("main", true);
+      setLoading("compare", state.mode === "compare");
+      setError("main", "");
+      setError("compare", "");
+
+      const underlay = state.underlay === "none" ? "" : productUrl(state.underlay);
+      const main = productUrl(state.product);
+      const compare = productUrl(state.compare);
+
+      els.mainUnderlay.style.display = underlay ? "block" : "none";
+      els.compareUnderlay.style.display = underlay ? "block" : "none";
+      if (underlay) {
+        els.mainUnderlay.src = underlay;
+        els.compareUnderlay.src = underlay;
+      }
+
+      attachImageHandlers(els.mainImage, "main");
+      attachImageHandlers(els.compareImage, "compare");
+      attachImageHandlers(els.stackCompareImage, "compare");
+
+      els.mainImage.src = main;
+      els.compareImage.src = compare;
+      els.stackCompareImage.src = compare;
+
+      els.mainImage.style.opacity = state.productOpacity / 100;
+      els.compareImage.style.opacity = state.productOpacity / 100;
+      els.stackCompareImage.style.opacity = Math.max(0.15, state.productOpacity / 100 * 0.72);
+      els.mainUnderlay.style.opacity = state.underlayOpacity / 100;
+      els.compareUnderlay.style.opacity = state.underlayOpacity / 100;
+      els.stackCompareImage.style.mixBlendMode = state.blend;
+
+      const scale = state.zoom / 100;
+      els.mainStack.style.transform = `scale(${scale})`;
+      els.compareStack.style.transform = `scale(${scale})`;
+    }
+
+    function updateLabels() {
+      const main = productInfo(state.product);
+      const compare = productInfo(state.compare);
+      const sector = sectorInfo();
+
+      els.sectorCrumb.textContent = `${sector.short} / s${sector.id}`;
+      els.mainCrumb.textContent = main.name;
+      els.compareCrumb.textContent = compare.name;
+      els.modeCrumb.textContent = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
+      els.mainCode.textContent = main.code;
+      els.compareCode.textContent = compare.code;
+      els.productOpacityValue.textContent = `${state.productOpacity}%`;
+      els.underlayOpacityValue.textContent = `${state.underlayOpacity}%`;
+      els.zoomValue.textContent = `${state.zoom}%`;
+      els.spcPageLink.href = spcSectorUrl();
+      els.refreshStatus.textContent = `Updated ${new Date(state.refreshKey).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
+      document.title = `MesoView | ${sector.short} ${main.code.toUpperCase()}`;
+    }
+
+    function syncControls() {
+      els.sectorSelect.value = state.sector;
+      els.compareSelect.value = state.compare;
+      els.underlaySelect.value = state.underlay;
+      els.productOpacity.value = state.productOpacity;
+      els.underlayOpacity.value = state.underlayOpacity;
+      els.blendSelect.value = state.blend;
+      els.zoomSlider.value = state.zoom;
+      els.autoRefresh.value = String(state.autoRefresh);
+      document.documentElement.dataset.theme = state.theme;
+      els.themeBtn.textContent = state.theme === "dark" ? "☾" : "☀";
+      renderProducts();
+      setMode(state.mode);
+    }
+
+    function refreshImages({ bustCache = true, announce = false } = {}) {
+      if (bustCache) state.refreshKey = Date.now();
+      updateLabels();
+      updateImages();
+      writeStateToUrl();
+      if (announce) showToast("Reloaded SPC graphics.");
+    }
+
+    function setProduct(code) {
+      const clean = normalizeCode(code);
+      if (!clean) return;
+      state.product = clean;
+      renderProducts();
+      refreshImages({ announce: false });
+    }
+
+    function setupAutoRefresh() {
+      if (autoTimer) clearInterval(autoTimer);
+      if (state.autoRefresh > 0) {
+        autoTimer = setInterval(() => refreshImages({ bustCache: true, announce: false }), state.autoRefresh * 1000);
+      }
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2400);
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Copied to clipboard.");
+      } catch (error) {
+        showToast("Clipboard blocked by browser. Open the image and copy from the address bar.");
+      }
+    }
+
+    function applyPreset(preset) {
+      state.product = preset.product;
+      state.compare = preset.compare;
+      state.mode = preset.mode;
+      state.underlay = preset.underlay;
+      syncControls();
+      refreshImages({ announce: true });
+    }
+
+    function bindEvents() {
+      els.sectorSelect.addEventListener("change", (event) => {
+        state.sector = event.target.value;
+        refreshImages({ announce: true });
+      });
+
+      els.autoRefresh.addEventListener("change", (event) => {
+        state.autoRefresh = Number(event.target.value);
+        setupAutoRefresh();
+        showToast(state.autoRefresh ? `Auto-refresh set to ${state.autoRefresh / 60} min.` : "Auto-refresh off.");
+      });
+
+      els.productSearch.addEventListener("input", renderProducts);
+
+      els.productList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-code]");
+        if (!button) return;
+        setProduct(button.dataset.code);
+      });
+
+      els.presetGrid.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-preset]");
+        if (!button) return;
+        const preset = presets.find((p) => p.id === button.dataset.preset);
+        if (preset) applyPreset(preset);
+      });
+
+      document.querySelectorAll(".segmented button").forEach((button) => {
+        button.addEventListener("click", () => {
+          setMode(button.dataset.mode);
+          refreshImages({ bustCache: false });
+        });
+      });
+
+      els.customBtn.addEventListener("click", () => {
+        const clean = normalizeCode(els.customCode.value);
+        if (!clean) return showToast("Enter an SPC product code first.");
+        setProduct(clean);
+        showToast(`Loaded custom product ${clean}.`);
+      });
+
+      els.customCode.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") els.customBtn.click();
+      });
+
+      els.compareSelect.addEventListener("change", (event) => {
+        state.compare = normalizeCode(event.target.value);
+        refreshImages({ announce: false });
+      });
+
+      els.underlaySelect.addEventListener("change", (event) => {
+        state.underlay = event.target.value;
+        refreshImages({ announce: false });
+      });
+
+      els.productOpacity.addEventListener("input", (event) => {
+        state.productOpacity = Number(event.target.value);
+        updateLabels();
+        updateImages();
+      });
+
+      els.underlayOpacity.addEventListener("input", (event) => {
+        state.underlayOpacity = Number(event.target.value);
+        updateLabels();
+        updateImages();
+      });
+
+      els.blendSelect.addEventListener("change", (event) => {
+        state.blend = event.target.value;
+        updateImages();
+      });
+
+      els.zoomSlider.addEventListener("input", (event) => {
+        state.zoom = Number(event.target.value);
+        updateLabels();
+        updateImages();
+      });
+
+      els.refreshBtn.addEventListener("click", () => refreshImages({ bustCache: true, announce: true }));
+      els.openImageBtn.addEventListener("click", () => window.open(productUrl(state.product), "_blank", "noopener"));
+      els.copyUrlBtn.addEventListener("click", () => copyText(productUrl(state.product)));
+
+      els.themeBtn.addEventListener("click", () => {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        localStorage.setItem("mesoview-theme", state.theme);
+        syncControls();
+      });
+
+      els.fitBtn.addEventListener("click", () => {
+        state.zoom = 100;
+        syncControls();
+        updateImages();
+      });
+
+      els.zoomInBtn.addEventListener("click", () => {
+        state.zoom = Math.min(180, state.zoom + 10);
+        syncControls();
+        updateImages();
+      });
+
+      els.zoomOutBtn.addEventListener("click", () => {
+        state.zoom = Math.max(70, state.zoom - 10);
+        syncControls();
+        updateImages();
+      });
+
+      els.swapBtn.addEventListener("click", () => {
+        [state.product, state.compare] = [state.compare, state.product];
+        syncControls();
+        refreshImages({ announce: true });
+      });
+
+      document.addEventListener("keydown", (event) => {
+        const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+        if (event.key === "/" && !typing) {
+          event.preventDefault();
+          els.productSearch.focus();
         }
+        if (typing) return;
+        if (event.key.toLowerCase() === "r") refreshImages({ bustCache: true, announce: true });
+        if (event.key === "1") { setMode("single"); refreshImages({ bustCache: false }); }
+        if (event.key === "2") { setMode("compare"); refreshImages({ bustCache: false }); }
+        if (event.key === "3") { setMode("stack"); refreshImages({ bustCache: false }); }
+        if (event.key === "+" || event.key === "=") { els.zoomInBtn.click(); }
+        if (event.key === "-" || event.key === "_") { els.zoomOutBtn.click(); }
+      });
+    }
 
-        setupToggle('toggle-rdr', 'layer-rdr');
-        setupToggle('toggle-sbcp', 'layer-sbcp');
-        setupToggle('toggle-mlcp', 'layer-mlcp');
-        setupToggle('toggle-dcape', 'layer-dcape');
-        setupToggle('toggle-eshr', 'layer-eshr');
-        setupToggle('toggle-stpc', 'layer-stpc');
-    </script>
+    function init() {
+      loadStateFromUrl();
+      renderSectorOptions();
+      renderPresets();
+      renderCompareOptions();
+      bindEvents();
+      syncControls();
+      refreshImages({ bustCache: true });
+      setupAutoRefresh();
+    }
+
+    init();
+  </script>
 </body>
 </html>
